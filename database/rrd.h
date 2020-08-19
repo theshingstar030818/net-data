@@ -370,6 +370,8 @@ struct rrdset_volatile {
     char *old_title;
     char *old_family;
     char *old_context;
+    int from;
+    int to;
 };
 
 // ----------------------------------------------------------------------------
