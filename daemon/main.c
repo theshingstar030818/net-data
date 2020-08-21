@@ -32,7 +32,7 @@ void netdata_cleanup_and_exit(int ret) {
     // cleanup/save the database and exit
     info("EXIT: cleaning up the database...");
     // Shutdown SQLITE
-    sql_close_database();
+
     rrdhost_cleanup_all();
 
     if(!ret) {
@@ -51,6 +51,7 @@ void netdata_cleanup_and_exit(int ret) {
 #ifdef ENABLE_DBENGINE
         rrdeng_exit(&multidb_ctx);
 #endif
+        sql_close_database();
     }
 
     // unlink the pid
