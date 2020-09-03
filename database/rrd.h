@@ -4,6 +4,7 @@
 #define NETDATA_RRD_H 1
 
 #define SQLITE_POC
+#include <sqlite3.h>
 
 // forward typedefs
 typedef struct rrdhost RRDHOST;
@@ -303,6 +304,13 @@ struct rrddim_query_handle {
             long slot;
             long last_slot;
             uint8_t finished;
+#ifdef SQLITE_POC
+            sqlite3_stmt *query;
+            time_t local_start_time;       // Expected data range from DB
+            time_t local_end_time;
+            size_t entries;
+            int init;
+#endif
         } slotted;                         // state the legacy code uses
 #ifdef ENABLE_DBENGINE
         struct rrdeng_query_handle {
@@ -326,6 +334,9 @@ struct rrddim_volatile {
     uuid_t *metric_uuid;                 // global UUID for this metric (unique_across hosts)
     struct pg_cache_page_index *page_index;
     uint32_t compaction_id;              // The last metadata log compaction procedure that has processed this object.
+#endif
+#ifdef SQLITE_POC
+    uuid_t *metric_uuid;
 #endif
     union rrddim_collect_handle handle;
     // ------------------------------------------------------------------------
@@ -372,6 +383,8 @@ struct rrdset_volatile {
     char *old_context;
     int from;
     int to;
+    time_t first_entry_t;       // First entry in SQLite database (init LONG_MAX)
+    time_t last_entry_t;        // Last entry in SQLite database (init 0)
 };
 
 // ----------------------------------------------------------------------------
@@ -816,6 +829,9 @@ struct rrdhost {
     uint32_t compaction_id;                         // The last metadata log compaction procedure that has processed
                                                     // this object.
 #endif
+#ifdef SQLITE_POC
+    uuid_t  host_uuid;                              // Global GUID for this host
+#endif
 
 #ifdef ENABLE_HTTPS
     struct netdata_ssl ssl;                         //Structure used to encrypt the connection
@@ -948,12 +964,10 @@ extern RRDSET *rrdset_create_custom(RRDHOST *host
                              , RRDSET_TYPE chart_type
                              , RRD_MEMORY_MODE memory_mode
                              , long history_entries
-                             , int is_archived
-                             , uuid_t *chart_uuid
-                             , uuid_t *host_uuid);
+                             , int is_archived);
 
 #define rrdset_create(host, type, id, name, family, context, title, units, plugin, module, priority, update_every, chart_type) \
-    rrdset_create_custom(host, type, id, name, family, context, title, units, plugin, module, priority, update_every, chart_type, (host)->rrd_memory_mode, (host)->rrd_history_entries, 0, NULL, NULL)
+    rrdset_create_custom(host, type, id, name, family, context, title, units, plugin, module, priority, update_every, chart_type, (host)->rrd_memory_mode, (host)->rrd_history_entries, 0)
 
 #define rrdset_create_localhost(type, id, name, family, context, title, units, plugin, module, priority, update_every, chart_type) \
     rrdset_create(localhost, type, id, name, family, context, title, units, plugin, module, priority, update_every, chart_type)
