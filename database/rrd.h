@@ -86,7 +86,8 @@ typedef enum rrd_memory_mode {
     RRD_MEMORY_MODE_MAP  = 2,
     RRD_MEMORY_MODE_SAVE = 3,
     RRD_MEMORY_MODE_ALLOC = 4,
-    RRD_MEMORY_MODE_DBENGINE = 5
+    RRD_MEMORY_MODE_DBENGINE = 5,
+    RRD_MEMORY_MODE_SQLITE = 6
 } RRD_MEMORY_MODE;
 
 #define RRD_MEMORY_MODE_NONE_NAME "none"
@@ -95,6 +96,7 @@ typedef enum rrd_memory_mode {
 #define RRD_MEMORY_MODE_SAVE_NAME "save"
 #define RRD_MEMORY_MODE_ALLOC_NAME "alloc"
 #define RRD_MEMORY_MODE_DBENGINE_NAME "dbengine"
+#define RRD_MEMORY_MODE_SQLITE_NAME "sqlite"
 
 extern RRD_MEMORY_MODE default_rrd_memory_mode;
 
@@ -353,8 +355,6 @@ struct rrddim_volatile {
     time_t db_last_entry_t;        // Last entry in the SQLite database (inclusive)
     struct rrddim_metric_page *metric_page_last;
     struct rrddim_metric_page *metric_page;
-//    size_t active_count;
-//    storage_number *values;        // Store the values here
 #endif
     union rrddim_collect_handle handle;
     // ------------------------------------------------------------------------
@@ -1057,6 +1057,7 @@ extern void rrdset_isnot_obsolete(RRDSET *st);
 
 // get the timestamp of the last entry in the round robin database
 static inline time_t rrdset_last_entry_t(RRDSET *st) {
+#ifdef ENABLE_DBENGINE
     if (st->rrd_memory_mode == RRD_MEMORY_MODE_DBENGINE) {
         RRDDIM *rd;
         time_t last_entry_t  = 0;
@@ -1068,9 +1069,10 @@ static inline time_t rrdset_last_entry_t(RRDSET *st) {
         if(0 == ret) netdata_rwlock_unlock(&st->rrdset_rwlock);
 
         return last_entry_t;
-    } else {
-        return (time_t)st->last_updated.tv_sec;
     }
+#endif
+    return (time_t)st->last_updated.tv_sec;
+
 }
 
 // get the timestamp of first entry in the round robin database
@@ -1090,6 +1092,11 @@ static inline time_t rrdset_first_entry_t(RRDSET *st) {
     } else {
         return (time_t)(rrdset_last_entry_t(st) - rrdset_duration(st));
     }
+    }
+#endif
+    if (st->rrd_memory_mode == RRD_MEMORY_MODE_SQLITE)
+        return st->state->first_entry_t;
+    return (time_t)(rrdset_last_entry_t(st) - rrdset_duration(st));
 }
 
 // get the timestamp of the last entry in the round robin database
@@ -1193,9 +1200,9 @@ static inline time_t rrdset_slot2time(RRDSET *st, size_t slot) {
 extern void rrdcalc_link_to_rrddim(RRDDIM *rd, RRDSET *st, RRDHOST *host);
 extern RRDDIM *rrddim_add_custom(RRDSET *st, const char *id, const char *name, collected_number multiplier,
                                  collected_number divisor, RRD_ALGORITHM algorithm, RRD_MEMORY_MODE memory_mode,
-                                 int is_archived, uuid_t *dim_uuid, uuid_t *chart_uuid);
+                                 int is_archived);
 #define rrddim_add(st, id, name, multiplier, divisor, algorithm) rrddim_add_custom(st, id, name, multiplier, divisor, \
-                                                                                   algorithm, (st)->rrd_memory_mode, 0, NULL, NULL)
+                                                                                   algorithm, (st)->rrd_memory_mode, 0)
 
 extern int rrddim_set_name(RRDSET *st, RRDDIM *rd, const char *name);
 extern int rrddim_set_algorithm(RRDSET *st, RRDDIM *rd, RRD_ALGORITHM algorithm);
