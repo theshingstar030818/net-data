@@ -1581,7 +1581,10 @@ RRDR *rrd2rrdr(
         last_entry_t = context_param_list->last_entry_t;
     } else {
         first_entry_t = rrdset_first_entry_t(st);   // Handles SQLITE mode
-        last_entry_t = rrdset_last_entry_t(st);
+        if (rrdset_flag_check(st, RRDSET_FLAG_ARCHIVED))
+            last_entry_t = st->state->last_entry_t;
+        else
+            last_entry_t = rrdset_last_entry_t(st);
     }
 
     rrd_update_every = st->update_every;
