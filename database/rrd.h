@@ -3,7 +3,7 @@
 #ifndef NETDATA_RRD_H
 #define NETDATA_RRD_H 1
 
-#define SQLITE_POC
+//#define SQLITE_POC
 #include "database/sqlite/sqlite3.h"
 
 // forward typedefs
@@ -306,7 +306,7 @@ struct rrddim_query_handle {
             long slot;
             long last_slot;
             uint8_t finished;
-#ifdef SQLITE_POC
+#ifdef ENABLE_SQLITE
             sqlite3_stmt *query;
             time_t local_start_time;       // Expected data range from DB
             time_t local_end_time;
@@ -348,7 +348,7 @@ struct rrddim_volatile {
     struct pg_cache_page_index *page_index;
     uint32_t compaction_id;              // The last metadata log compaction procedure that has processed this object.
 #endif
-#ifdef SQLITE_POC
+#ifdef ENABLE_SQLITE
 #ifndef ENABLE_DBENGINE
     uuid_t *metric_uuid;
 #endif
@@ -860,7 +860,7 @@ struct rrdhost {
     uint32_t compaction_id;                         // The last metadata log compaction procedure that has processed
                                                     // this object.
 #endif
-#ifdef SQLITE_POC
+#ifdef ENABLE_SQLITE
 #ifndef ENABLE_DBENGINE
     uuid_t  host_uuid;                              // Global GUID for this host
 #endif

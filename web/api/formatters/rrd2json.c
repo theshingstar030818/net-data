@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include <database/sqlite/sqlite_functions.h>
 #include "web/api/web_api_v1.h"
+#ifdef ENABLE_SQLITE
+#include <database/sqlite/sqlite_functions.h>
+#endif
 
 static inline void free_temp_rrddim(RRDDIM *temp_rd)
 {
@@ -371,6 +373,21 @@ int rrdset2anything_api_v1(
         break;
     }
 
+#ifdef ENABLE_SQLITE
+    if (temp_rd) {
+        RRDDIM *t;
+        while(temp_rd) {
+            t = temp_rd->next;
+            freez(temp_rd->id);
+            freez(temp_rd->name);
+            freez(temp_rd->state->metric_uuid);
+            //freez(rd->state->page_index);
+            freez(temp_rd->state);
+            freez(temp_rd);
+            temp_rd = t;
+        }
+    }
+#endif
     rrdr_free(r);
     return HTTP_RESP_OK;
 }
