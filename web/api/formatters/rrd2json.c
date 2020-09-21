@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "web/api/web_api_v1.h"
-#ifdef ENABLE_SQLITE
-#include <database/sqlite/sqlite_functions.h>
-#endif
 
 static inline void free_temp_rrddim(RRDDIM *temp_rd)
 {
