@@ -36,7 +36,7 @@ PARSER_RC metalog_pluginsd_host_action(
         struct metalog_record record;
         struct metadata_logfile *metalogfile = state->metalogfile;
 
-        sql_store_host(machine_guid, hostname, registry_hostname, update_every, os, timezone, tags);
+        //sql_store_host(machine_guid, hostname, registry_hostname, update_every, os, timezone, tags);
 
         uuid_parse(machine_guid, record.uuid);
         mlf_record_insert(metalogfile, &record);
@@ -122,7 +122,7 @@ PARSER_RC metalog_pluginsd_chart_action(void *user, char *type, char *id, char *
     st = rrdset_create_custom(
         host, type, id, name, family, context, title, units,
         plugin, module, priority, update_every,
-        chart_type, RRD_MEMORY_MODE_DBENGINE, (host)->rrd_history_entries, 1, chart_uuid, host_uuid);
+        chart_type, RRD_MEMORY_MODE_DBENGINE, (host)->rrd_history_entries, 1, chart_uuid);
 
     rrdset_isnot_obsolete(st); /* archived charts cannot be obsolete */
     if (options && *options) {
@@ -175,7 +175,7 @@ PARSER_RC metalog_pluginsd_dimension_action(void *user, RRDSET *st, char *id, ch
         chart_uuid = &(((PARSER_USER_OBJECT *)user)->chart_uuid);
 
     RRDDIM *rd =
-        rrddim_add_custom(st, id, name, multiplier, divisor, algorithm_type, RRD_MEMORY_MODE_DBENGINE, 1, dim_uuid, chart_uuid);
+        rrddim_add_custom(st, id, name, multiplier, divisor, algorithm_type, RRD_MEMORY_MODE_DBENGINE, 1, dim_uuid);
 
     rrddim_flag_clear(rd, RRDDIM_FLAG_HIDDEN);
     rrddim_flag_clear(rd, RRDDIM_FLAG_DONT_DETECT_RESETS_OR_OVERFLOWS);
@@ -217,7 +217,7 @@ PARSER_RC metalog_pluginsd_context_action(void *user, uuid_t *uuid)
     uuid_t *chart_guid, *chart_char_guid;
     RRDHOST *host;
 
-    ret = sql_find_object_by_guid(uuid, object, 49);
+    ret = find_object_by_guid(uuid, object, 49);
     switch (ret) {
         case GUID_TYPE_NOTFOUND:
             error_with_guid(uuid, "Failed to find valid context");

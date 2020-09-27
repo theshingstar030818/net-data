@@ -995,11 +995,19 @@ extern RRDSET *rrdset_create_custom(RRDHOST *host
                              , RRDSET_TYPE chart_type
                              , RRD_MEMORY_MODE memory_mode
                              , long history_entries
-                             , int is_archived);
+                             , int is_archived
+#ifdef ENABLE_DBENGINE
+                             , uuid_t *chart_uuid
+#endif
+                                    );
 
+#ifdef ENABLE_DBENGINE
+#define rrdset_create(host, type, id, name, family, context, title, units, plugin, module, priority, update_every, chart_type) \
+    rrdset_create_custom(host, type, id, name, family, context, title, units, plugin, module, priority, update_every, chart_type, (host)->rrd_memory_mode, (host)->rrd_history_entries, 0, NULL)
+#else
 #define rrdset_create(host, type, id, name, family, context, title, units, plugin, module, priority, update_every, chart_type) \
     rrdset_create_custom(host, type, id, name, family, context, title, units, plugin, module, priority, update_every, chart_type, (host)->rrd_memory_mode, (host)->rrd_history_entries, 0)
-
+#endif
 #define rrdset_create_localhost(type, id, name, family, context, title, units, plugin, module, priority, update_every, chart_type) \
     rrdset_create(localhost, type, id, name, family, context, title, units, plugin, module, priority, update_every, chart_type)
 
@@ -1210,11 +1218,20 @@ static inline time_t rrdset_slot2time(RRDSET *st, size_t slot) {
 // RRD DIMENSION functions
 
 extern void rrdcalc_link_to_rrddim(RRDDIM *rd, RRDSET *st, RRDHOST *host);
+
+#ifdef ENABLE_DBENGINE
+extern RRDDIM *rrddim_add_custom(RRDSET *st, const char *id, const char *name, collected_number multiplier,
+                                 collected_number divisor, RRD_ALGORITHM algorithm, RRD_MEMORY_MODE memory_mode,
+                                 int is_archived, uuid_t *dim_uuid);
+#define rrddim_add(st, id, name, multiplier, divisor, algorithm) rrddim_add_custom(st, id, name, multiplier, divisor, \
+                                                                                   algorithm, (st)->rrd_memory_mode, 0, NULL)
+#else
 extern RRDDIM *rrddim_add_custom(RRDSET *st, const char *id, const char *name, collected_number multiplier,
                                  collected_number divisor, RRD_ALGORITHM algorithm, RRD_MEMORY_MODE memory_mode,
                                  int is_archived);
 #define rrddim_add(st, id, name, multiplier, divisor, algorithm) rrddim_add_custom(st, id, name, multiplier, divisor, \
                                                                                    algorithm, (st)->rrd_memory_mode, 0)
+#endif
 
 extern int rrddim_set_name(RRDSET *st, RRDDIM *rd, const char *name);
 extern int rrddim_set_algorithm(RRDSET *st, RRDDIM *rd, RRD_ALGORITHM algorithm);

@@ -520,6 +520,9 @@ RRDSET *rrdset_create_custom(
         , RRD_MEMORY_MODE memory_mode
         , long history_entries
         , int is_archived
+#ifdef ENABLE_DBENGINE
+        , uuid_t *chart_uuid
+#endif
 )
 {
     if (!type || !type[0]) {
@@ -962,14 +965,14 @@ RRDSET *rrdset_create_custom(
     if (st->rrd_memory_mode == RRD_MEMORY_MODE_DBENGINE) {
         int replace_instead_of_generate = 0;
 
-        uuid_t *sqlite_chart_uuid = NULL;
-        if (chart_uuid == NULL)
-            sqlite_chart_uuid = sql_find_chart_uuid(host, st->id, st->name);
-
-        if (sqlite_chart_uuid)
-            st->chart_uuid = sqlite_chart_uuid;
-        else
-            st->chart_uuid = callocz(1, sizeof(uuid_t));
+//        uuid_t *sqlite_chart_uuid = NULL;
+//        if (chart_uuid == NULL)
+//            sqlite_chart_uuid = sql_find_chart_uuid(host, st->id, st->name);
+//
+//        if (sqlite_chart_uuid)
+//            st->chart_uuid = sqlite_chart_uuid;
+//        else
+        st->chart_uuid = callocz(1, sizeof(uuid_t));
         if (NULL != chart_uuid) {
             replace_instead_of_generate = 1;
             uuid_copy(*st->chart_uuid, *chart_uuid);

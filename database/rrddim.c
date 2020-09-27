@@ -215,9 +215,16 @@ void rrdcalc_link_to_rrddim(RRDDIM *rd, RRDSET *st, RRDHOST *host) {
 #endif
 }
 
+
+#ifdef ENABLE_DBENGINE
+RRDDIM *rrddim_add_custom(RRDSET *st, const char *id, const char *name, collected_number multiplier,
+                          collected_number divisor, RRD_ALGORITHM algorithm, RRD_MEMORY_MODE memory_mode,
+                          int is_archived, uuid_t *dim_uuid) {
+#else
 RRDDIM *rrddim_add_custom(RRDSET *st, const char *id, const char *name, collected_number multiplier,
                           collected_number divisor, RRD_ALGORITHM algorithm, RRD_MEMORY_MODE memory_mode,
                           int is_archived) {
+#endif
     RRDDIM *rd = NULL;
 
     RRDHOST *host = st->rrdhost;
