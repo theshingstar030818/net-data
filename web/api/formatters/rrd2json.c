@@ -370,21 +370,6 @@ int rrdset2anything_api_v1(
         break;
     }
 
-#ifdef ENABLE_SQLITE
-    if (temp_rd) {
-        RRDDIM *t;
-        while(temp_rd) {
-            t = temp_rd->next;
-            freez(temp_rd->id);
-            freez(temp_rd->name);
-            freez(temp_rd->state->metric_uuid);
-            //freez(rd->state->page_index);
-            freez(temp_rd->state);
-            freez(temp_rd);
-            temp_rd = t;
-        }
-    }
-#endif
     rrdr_free(r);
     return HTTP_RESP_OK;
 }

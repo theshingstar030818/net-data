@@ -97,6 +97,7 @@ typedef struct rrdresult {
 
 #define rrdr_rows(r) ((r)->rows)
 
+#include "../../../database/rrd.h"
 extern void rrdr_free(RRDR *r);
 extern RRDR *rrdr_create(struct rrdset *st, long n, struct context_param *context_param_list);
 

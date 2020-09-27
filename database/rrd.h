@@ -1089,6 +1089,7 @@ static inline time_t rrdset_last_entry_t(RRDSET *st) {
 
 // get the timestamp of first entry in the round robin database
 static inline time_t rrdset_first_entry_t(RRDSET *st) {
+#ifdef ENABLE_DBENGINE
     if (st->rrd_memory_mode == RRD_MEMORY_MODE_DBENGINE) {
         RRDDIM *rd;
         time_t first_entry_t = LONG_MAX;
@@ -1103,7 +1104,6 @@ static inline time_t rrdset_first_entry_t(RRDSET *st) {
         return first_entry_t;
     } else {
         return (time_t)(rrdset_last_entry_t(st) - rrdset_duration(st));
-    }
     }
 #endif
     if (st->rrd_memory_mode == RRD_MEMORY_MODE_SQLITE)
