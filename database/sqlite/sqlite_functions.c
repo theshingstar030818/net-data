@@ -512,13 +512,13 @@ int sql_init_database()
         sqlite3_free(err_msg);
     }
 
-    rc = sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS metric_page(dim_uuid blob, entries int, start_date int, end_date int, metric blob);", 0, 0, &err_msg);
+    rc = sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS metric_page(metric_id int, entries int, start_date int, end_date int, metric blob);", 0, 0, &err_msg);
     if (rc != SQLITE_OK) {
         error("SQL error: %s", err_msg);
         sqlite3_free(err_msg);
     }
 
-    rc = sqlite3_exec(db, "create unique index if not exists ind_metric_page on metric_page (dim_uuid, start_date);", 0, 0, &err_msg);
+    rc = sqlite3_exec(db, "create unique index if not exists ind_metric_page on metric_page (metric_id, start_date);", 0, 0, &err_msg);
 
     if (rc != SQLITE_OK) {
         error("SQL error: %s", err_msg);
@@ -532,7 +532,7 @@ int sql_init_database()
         sqlite3_free(err_msg);
     }
 
-    rc = sqlite3_exec(db, "create index if not exists ind_se on metric_page (dim_uuid, start_date, end_date);", 0, 0, &err_msg);
+    rc = sqlite3_exec(db, "create index if not exists ind_se on metric_page (metric_id, start_date, end_date);", 0, 0, &err_msg);
 
     if (rc != SQLITE_OK) {
         error("SQL error: %s", err_msg);
@@ -1502,7 +1502,7 @@ void sql_add_metric_page_nolock(uuid_t *dim_uuid, storage_number *metric, size_t
         return;
 
     if (!stmt_metric_page) {
-        rc = sqlite3_prepare_v2(db_page, "insert into metric_page (entries, dim_uuid, start_date, end_date, metric) values (@entries, @dim, @start_date, @end_date, @page);", -1, &stmt_metric_page, 0);
+        rc = sqlite3_prepare_v2(db_page, "insert into metric_page (entries, metric_id, start_date, end_date, metric) values (@entries, (select rowid from dimension where dim_uuid = @dim), @start_date, @end_date, @page);", -1, &stmt_metric_page, 0);
         if (rc != SQLITE_OK) {
             info("SQLITE: Failed to prepare statement for metric page");
             return;
@@ -1581,7 +1581,7 @@ void sql_add_metric_page(uuid_t *dim_uuid, storage_number *metric, size_t entrie
     uv_mutex_lock(&sqlite_add_page);
 
     if (!stmt_metric_page) {
-        rc = sqlite3_prepare_v2(db_page, "insert into metric_page (entries, dim_uuid, start_date, end_date, metric) values (@entries, @dim, @start_date, @end_date, @page);", -1, &stmt_metric_page, 0);
+        rc = sqlite3_prepare_v2(db_page, "insert into metric_page (entries, metric_id, start_date, end_date, metric) values (@entries, (select rowid from dimension where dim_uuid = @dim), @start_date, @end_date, @page);", -1, &stmt_metric_page, 0);
         if (rc != SQLITE_OK) {
             info("SQLITE: Failed to prepare statement for metric page");
             uv_mutex_unlock(&sqlite_add_page);
@@ -1910,7 +1910,7 @@ void sql_rrdset_first_entry_t(RRDSET *st, time_t *first, time_t *last)
 
     if (!res) {
         rc = sqlite3_prepare_v2(
-            db, "select min(m.start_date), max(m.end_date) from metric_page m, chart c, dimension d where c.chart_uuid = @chart_uuid and d.chart_uuid = c.chart_uuid and d.dim_uuid = m.dim_uuid;", -1, &res, 0);
+            db, "select min(m.start_date), max(m.end_date) from metric_page m, chart c, dimension d where c.chart_uuid = @chart_uuid and d.chart_uuid = c.chart_uuid and d.rowid = m.metric_id;", -1, &res, 0);
         if (rc != SQLITE_OK)
             return;
     }
@@ -1950,7 +1950,7 @@ void sql_rrddim_first_last_entry_t(RRDDIM *rd, time_t *first, time_t *last)
     uv_mutex_lock(&sqlite_lookup);
     if (!res) {
         rc = sqlite3_prepare_v2(
-            db, "select min(m.start_date), max(m.end_date) from metric_page m where m.dim_uuid = @dim_uuid;", -1, &res,
+            db, "select min(m.start_date), max(m.end_date) from metric_page m, dimension d where d.dim_uuid = @dim_uuid and d.rowid = m.metric_id;", -1, &res,
             0);
         if (rc != SQLITE_OK) {
             uv_mutex_unlock(&sqlite_lookup);
@@ -2000,7 +2000,7 @@ time_t sql_rrdset_last_entry_t(RRDSET *st)
     if (!res) {
         rc = sqlite3_prepare_v2(
             db,
-            "select max(m.end_date) from metric_page m, chart c, dimension d where c.chart_uuid = @chart_uuid and d.chart_uuid = c.chart_uuid and d.dim_uuid = m.dim_uuid;",
+            "select max(m.end_date) from metric_page m, chart c, dimension d where c.chart_uuid = @chart_uuid and d.chart_uuid = c.chart_uuid and d.rowid = m.metric_id;",
             -1, &res, 0);
         if (rc != SQLITE_OK)
             return 0;
@@ -2313,6 +2313,7 @@ int rrddim_sql_collect_finalize(RRDDIM *rd)
 {
     (void)rd;
 
+    //info("Finalize metric for RD = %s", rd->id);
     sqlite_flush_page(0, rd->state->metric_page_last);
     return 0;
 }
@@ -2365,7 +2366,7 @@ void rrddim_sql_query_init(RRDDIM *rd, struct rrddim_query_handle *handle, time_
 
               int rc = sqlite3_prepare_v2(
                 db,
-                "select start_date, end_date, entries, uncompress(metric) from metric_page where dim_uuid = @dim_uuid and (@start_date between start_date and end_date or @end_date between start_date and end_date or (@start_date <= start_date and @end_date >= end_date)) and entries > 0 order by start_date asc;",
+                "select start_date, end_date, entries, uncompress(metric) from metric_page m, dimension d where d.dim_uuid = @dim_uuid and m.metric_id = d.rowid and (@start_date between start_date and end_date or @end_date between start_date and end_date or (@start_date <= start_date and @end_date >= end_date)) and entries > 0 order by start_date asc;",
                 -1, query, 0);
             if (rc == SQLITE_OK) {
                 rc = sqlite3_bind_blob(*query, 1, rd->state->metric_uuid, 16, SQLITE_TRANSIENT);

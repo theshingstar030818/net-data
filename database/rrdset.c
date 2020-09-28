@@ -329,6 +329,11 @@ void rrdset_free(RRDSET *st) {
     rrdhost_check_wrlock(host);  // make sure we have a write lock on the host
     rrdset_wrlock(st);                  // lock this RRDSET
 
+#ifdef ENABLE_SQLITE
+    if (st->rrd_memory_mode == RRD_MEMORY_MODE_SQLITE)
+        free_uuid_cache(&st->state->uuid_cache);
+#endif
+
     // info("Removing chart '%s' ('%s')", st->id, st->name);
 
     // ------------------------------------------------------------------------
@@ -440,7 +445,8 @@ void rrdset_delete_custom(RRDSET *st, int db_rotated) {
 #endif
     rrdset_check_rdlock(st);
 
-    info("Deleting chart '%s' ('%s') from disk...", st->id, st->name);
+    if(st->rrd_memory_mode != RRD_MEMORY_MODE_SQLITE && st->rrd_memory_mode != RRD_MEMORY_MODE_DBENGINE)
+        info("Deleting chart '%s' ('%s') from disk...", st->id, st->name);
 
     if(st->rrd_memory_mode == RRD_MEMORY_MODE_SAVE || st->rrd_memory_mode == RRD_MEMORY_MODE_MAP) {
         info("Deleting chart header file '%s'.", st->cache_filename);
@@ -456,10 +462,10 @@ void rrdset_delete_custom(RRDSET *st, int db_rotated) {
         }
     }
 
-#ifdef ENABLE_SQLITE
-    if (st->rrd_memory_mode == RRD_MEMORY_MODE_SQLITE)
-        free_uuid_cache(&st->state->uuid_cache);
-#endif
+//#ifdef ENABLE_SQLITE
+//    if (st->rrd_memory_mode == RRD_MEMORY_MODE_SQLITE)
+//        free_uuid_cache(&st->state->uuid_cache);
+//#endif
 
     recursively_delete_dir(st->cache_dir, "left-over chart");
 #ifdef ENABLE_ACLK
