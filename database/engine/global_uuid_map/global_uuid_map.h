@@ -5,8 +5,6 @@
 
 #include "libnetdata/libnetdata.h"
 #include <Judy.h>
-#include "../../rrd.h"
-
 typedef enum guid_type {
     GUID_TYPE_CHAR,
     GUID_TYPE_HOST,
@@ -15,6 +13,8 @@ typedef enum guid_type {
     GUID_TYPE_NOTFOUND,
     GUID_TYPE_NOSPACE
 } GUID_TYPE;
+
+#include "../../rrd.h"
 
 extern GUID_TYPE find_object_by_guid(uuid_t *uuid, char *object, size_t max_bytes);
 extern int find_guid_by_object(char *object, uuid_t *uuid, GUID_TYPE);

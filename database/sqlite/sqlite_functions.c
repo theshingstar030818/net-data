@@ -558,26 +558,28 @@ int sql_init_database()
 
 
     // Determine the database page seq storage fraction
-    sqlite3_stmt *res;
-    int seqpc = 0;
-    rc = sqlite3_exec(db, SQLITE_GET_PAGE_SEQFRACTION1, 0, 0, &err_msg);
-    if (rc != SQLITE_OK) {
-        error("SQL error during database rotation %s", err_msg);
-        sqlite3_free(err_msg);
-    }
-    rc = sqlite3_prepare_v2(db, SQLITE_GET_PAGE_SEQFRACTION2, -1, &res, (const char **) &err_msg);
-    if (rc != SQLITE_OK) {
-        error("SQL error during database rotation %s", err_msg);
-        sqlite3_free(err_msg);
-    }
-    if (rc == SQLITE_OK) {
-        while (sqlite3_step(res) == SQLITE_ROW)
-            seqpc = sqlite3_column_int(res, 0);
-        info("Database sequential page storage is at %d%%", seqpc);
-        // TODO: If percentage is low, consider VACUUM to defragment
-    }
-    sqlite3_finalize(res);
-    rc = sqlite3_exec(db, "DROP TABLE s;", 0, 0, NULL);
+    // Code to determine database fragmentation
+    // Note: this will slow down startup, may not need it
+//    sqlite3_stmt *res;
+//    int seqpc = 0;
+//    rc = sqlite3_exec(db, SQLITE_GET_PAGE_SEQFRACTION1, 0, 0, &err_msg);
+//    if (rc != SQLITE_OK) {
+//        error("SQL error during database rotation %s", err_msg);
+//        sqlite3_free(err_msg);
+//    }
+//    rc = sqlite3_prepare_v2(db, SQLITE_GET_PAGE_SEQFRACTION2, -1, &res, (const char **) &err_msg);
+//    if (rc != SQLITE_OK) {
+//        error("SQL error during database rotation %s", err_msg);
+//        sqlite3_free(err_msg);
+//    }
+//    if (rc == SQLITE_OK) {
+//        while (sqlite3_step(res) == SQLITE_ROW)
+//            seqpc = sqlite3_column_int(res, 0);
+//        info("Database sequential page storage is at %d%%", seqpc);
+//        // TODO: If percentage is low, consider VACUUM to defragment
+//    }
+//    sqlite3_finalize(res);
+//    rc = sqlite3_exec(db, "DROP TABLE s;", 0, 0, NULL);
 
     db_initialized = 1;
 
@@ -944,7 +946,11 @@ RRDDIM *sql_create_dimension(char *dim_str, RRDSET *st, int temp)
         rd = rrddim_add_custom(
             st, (const char *)sqlite3_column_text(res, 0), (const char *)sqlite3_column_text(res, 1),
             sqlite3_column_int(res, 2), sqlite3_column_int(res, 3), sqlite3_column_int(res, 4), st->rrd_memory_mode,
-            temp);
+            temp
+#ifdef ENABLE_DBENGINE
+            , NULL
+#endif
+            );
 
         if (temp != 1) {
             rrddim_flag_clear(rd, RRDDIM_FLAG_HIDDEN);
@@ -1024,7 +1030,11 @@ RRDSET *sql_create_chart_by_name(RRDHOST *host, char *chart)
             sqlite3_column_int(res, 9),
             sqlite3_column_int(res, 10),
             sqlite3_column_int(res, 11),
-            host->rrd_memory_mode, host->rrd_history_entries, 1);
+            host->rrd_memory_mode, host->rrd_history_entries, 1
+#ifdef ENABLE_DBENGINE
+            , NULL
+#endif
+            );
     }
     rc = sqlite3_finalize(res);
     return st;

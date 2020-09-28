@@ -8,7 +8,7 @@
 #include "sqlite3.h"
 //#include "../rrd.h"
 #ifdef ENABLE_DBENGINE
-#include "../engine/global_uuid_map//global_uuid_map.h"
+#include "../engine/global_uuid_map/global_uuid_map.h"
 #endif
 
 #define SQLITE_GET_PAGE_SEQFRACTION1 "CREATE TEMP TABLE s(rowid INTEGER PRIMARY KEY, pageno INT);"\
