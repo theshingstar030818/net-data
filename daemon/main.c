@@ -54,7 +54,8 @@ void netdata_cleanup_and_exit(int ret) {
         rrdeng_exit(&multidb_ctx);
 #endif
 #ifdef ENABLE_SQLITE
-        sql_close_database();
+        if (default_rrd_memory_mode == RRD_MEMORY_MODE_SQLITE)
+            sql_close_database();
 #endif
     }
 

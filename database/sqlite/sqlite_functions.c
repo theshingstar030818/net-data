@@ -2761,6 +2761,12 @@ static void sqlite_stats_main_cleanup(void *ptr) {
 #define SQLITE_STATS_UPDATE_EVERY 5
 
 void *sqlite_stats_main(void *ptr) {
+
+    if (localhost->rrd_memory_mode != RRD_MEMORY_MODE_SQLITE) {
+        ((struct netdata_static_thread *)ptr)->enabled = NETDATA_MAIN_THREAD_EXITED;
+        return NULL;
+    }
+
     netdata_thread_cleanup_push(sqlite_stats_main_cleanup, ptr);
 
     RRDSET *st = rrdset_create_localhost(
@@ -2843,6 +2849,11 @@ static void sqlite_rotation_main_cleanup(void *ptr) {
 
 void *sqlite_rotation_main(void *ptr)
 {
+    if (localhost->rrd_memory_mode != RRD_MEMORY_MODE_SQLITE) {
+        ((struct netdata_static_thread *)ptr)->enabled = NETDATA_MAIN_THREAD_EXITED;
+        return NULL;
+    }
+
     netdata_thread_cleanup_push(sqlite_rotation_main_cleanup, ptr);
 
     char *err_msg = NULL;
