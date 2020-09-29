@@ -2163,6 +2163,142 @@ void sql_rrdim2json(uuid_t *chart_uuid, BUFFER *wb, size_t *dimensions_count, si
     buffer_sprintf(wb, "\n\t\t\t}");
 }
 
+#define SELECT_VDIMENSION "select d.id, d.name from virtual_dimension d where d.chart_uuid = @chart_uuid;"
+
+void sql_virtualdim2json(uuid_t *chart_uuid, BUFFER *wb, size_t *dimensions_count, size_t *memory_used)
+{
+    UNUSED(dimensions_count);
+    UNUSED(memory_used);
+
+    int rc;
+    sqlite3_stmt *res_dim = NULL;
+
+    rc = sqlite3_prepare_v2(db, SELECT_VDIMENSION, -1, &res_dim, 0);
+    if (rc != SQLITE_OK)
+        return;
+
+    rc = sqlite3_bind_blob(res_dim, 1, chart_uuid, 16, SQLITE_TRANSIENT);
+    if (rc != SQLITE_OK)
+        return;
+
+    //uuid_t dim_chart_uuid;
+//    char *dim_id = NULL;
+//    char *dim_name = NULL;
+//    int dim_multiplier = 0;
+//    int dim_divisor = 0;
+//    int dim_algorithm = 0;
+
+    int dimensions = 0;
+    buffer_sprintf(wb, "\t\t\t\"dimensions\": {\n");
+    while (sqlite3_step(res_dim) == SQLITE_ROW) {
+        if (dimensions)
+            buffer_strcat(wb, ",\n\t\t\t\t\"");
+        else
+            buffer_strcat(wb, "\t\t\t\t\"");
+        buffer_strcat_jsonescape(wb, (const char *) sqlite3_column_text(res_dim, 0));
+        buffer_strcat(wb, "\": { \"name\": \"");
+        buffer_strcat_jsonescape(wb, (const char *) sqlite3_column_text(res_dim, 1));
+        buffer_strcat(wb, "\" }");
+        dimensions++;
+
+    }
+    buffer_sprintf(wb, "\n\t\t\t}");
+}
+
+#define SELECT_VCHART "select chart_uuid, id, name, type, family, context, title, priority, plugin, module, unit, chart_type, update_every from virtual_chart where host_uuid = @host_uuid order by chart_uuid asc;"
+
+void sql_virtualset2json(RRDHOST *host, BUFFER *wb, size_t *dimensions_count, size_t *memory_used)
+{
+//    time_t first_entry_t = 0; //= rrdset_first_entry_t(st);
+    //   time_t last_entry_t = 0; //rrdset_last_entry_t(st);
+    int rc;
+
+    sqlite3_stmt *res_chart = NULL;
+
+    rc = sqlite3_prepare_v2(db, SELECT_VCHART, -1, &res_chart, 0);
+    if (rc != SQLITE_OK) {
+        error("Failed to prepare query to get charts. Wrong schema?");
+        return;
+    }
+    rc = sqlite3_bind_blob(res_chart, 1, &host->host_uuid, 16, SQLITE_TRANSIENT);
+
+//    uuid_t  chart_uuid;
+//    char   *chart_id = NULL;
+//    char   *chart_name = NULL;
+//    char   *chart_type = NULL;
+//    char   *chart_family = NULL;
+//    char   *chart_context = NULL;
+//    char   *chart_title = NULL;
+//    int    chart_priority = 0;
+//    char   *chart_plugin_name = NULL;
+//    char   *chart_module_name = NULL;
+//    char   *chart_units = NULL;
+//    int    chart_type_id = 0;
+//    int    chart_update_every = 0;
+
+//    int dimensions = 0;
+    int c = 0;
+    while (sqlite3_step(res_chart) == SQLITE_ROW) {
+        char id[512];
+        sprintf(id, "%s.%s", sqlite3_column_text(res_chart, 3), sqlite3_column_text(res_chart, 1));
+        //RRDSET *st = rrdset_find(host, id);
+        //if (st && !rrdset_flag_check(st, RRDSET_FLAG_ARCHIVED))
+        //    continue;
+
+        if (c)
+            buffer_strcat(wb, ",\n\t\t\"");
+        else
+            buffer_strcat(wb, "\n\t\t\"");
+        c++;
+
+        buffer_strcat(wb, id);
+        buffer_strcat(wb, "\": ");
+
+        buffer_sprintf(
+            wb,
+            "\t\t{\n"
+            "\t\t\t\"id\": \"%s\",\n"
+            "\t\t\t\"name\": \"%s\",\n"
+            "\t\t\t\"type\": \"%s\",\n"
+            "\t\t\t\"family\": \"%s\",\n"
+            "\t\t\t\"context\": \"%s\",\n"
+            "\t\t\t\"title\": \"%s (%s)\",\n"
+            "\t\t\t\"priority\": %ld,\n"
+            "\t\t\t\"plugin\": \"%s\",\n"
+            "\t\t\t\"module\": \"%s\",\n"
+            "\t\t\t\"enabled\": %s,\n"
+            "\t\t\t\"units\": \"%s\",\n"
+            "\t\t\t\"data_url\": \"/api/v1/data?chart=%s\",\n"
+            "\t\t\t\"chart_type\": \"%s\",\n",
+            id //sqlite3_column_text(res_chart, 1)
+            ,
+            id // sqlite3_column_text(res_chart, 2)
+            ,
+            sqlite3_column_text(res_chart, 3), sqlite3_column_text(res_chart, 4), sqlite3_column_text(res_chart, 5),
+            sqlite3_column_text(res_chart, 6), id //sqlite3_column_text(res_chart, 2)
+            ,
+            (long ) sqlite3_column_int(res_chart, 7),
+            (const char *) sqlite3_column_text(res_chart, 8) ? (const char *) sqlite3_column_text(res_chart, 8) : (char *) "",
+            (const char *) sqlite3_column_text(res_chart, 9) ? (const char *) sqlite3_column_text(res_chart, 9) : (char *) "", (char *) "false",
+            (const char *) sqlite3_column_text(res_chart, 10), id //sqlite3_column_text(res_chart, 2)
+            ,
+            rrdset_type_name(sqlite3_column_int(res_chart, 11)));
+
+        sql_virtualdim2json((uuid_t *) sqlite3_column_blob(res_chart, 0), wb, dimensions_count, memory_used);
+        //if (dimensions)
+        //    buffer_strcat(wb, ",\n\t\t\t\t\"");
+        //else
+        buffer_strcat(wb, "\n\t\t}");
+    }
+
+    //buffer_sprintf(wb, "\n\t\t}");
+
+    // Final cleanup;
+
+    return;
+}
+
+
 #define SELECT_CHART "select chart_uuid, id, name, type, family, context, title, priority, plugin, module, unit, chart_type, update_every from chart where host_uuid = @host_uuid and chart_uuid not in (select chart_uuid from chart_active) order by chart_uuid asc;"
 
 void sql_rrdset2json(RRDHOST *host, BUFFER *wb, size_t *dimensions_count, size_t *memory_used)

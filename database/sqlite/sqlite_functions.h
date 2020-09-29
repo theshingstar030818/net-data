@@ -119,6 +119,7 @@ extern struct rrddim_metric_page *rrddim_init_metric_page(RRDDIM *rd);
 
 extern RRDHOST *sql_create_host_by_name(char *hostname);
 extern RRDSET *sql_create_chart_by_name(RRDHOST *host, char *chart);
+extern void sql_virtualset2json(RRDHOST *host, BUFFER *wb, size_t *dimensions_count, size_t *memory_used);
 
 extern RRDHOST *rrdhost_create(
     const char *hostname, const char *registry_hostname, const char *guid, const char *os, const char *timezone,
