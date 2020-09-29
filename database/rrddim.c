@@ -408,7 +408,7 @@ RRDDIM *rrddim_add_custom(RRDSET *st, const char *id, const char *name, collecte
         rd->state->metric_uuid = sql_find_dim_uuid(st, rd);
     rd->state->db_first_entry_t = LONG_MAX;
     rd->state->db_last_entry_t = 0;
-    rd->state->gap_checked = 1;     //TODO: Check if we need actually gap filling
+    //rd->state->gap_checked = 1;     //TODO: Check if we need actually gap filling
     // TODO: Get a full structure with page info from a recycled list
     //rd->state->values = mallocz(st->entries * sizeof(storage_number));      // Allocate pointer
     rd->state->metric_page = rrddim_init_metric_page(rd);   // Active collect page

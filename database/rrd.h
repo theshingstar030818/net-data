@@ -308,7 +308,6 @@ struct rrddim_query_handle {
             time_t local_start_time;       // Expected data range from DB
             time_t local_end_time;
             size_t entries;
-            int init;
 #endif
         } slotted;                         // state the legacy code uses
 #ifdef ENABLE_DBENGINE
@@ -326,11 +325,11 @@ struct rrddim_query_handle {
 
 struct rrddim_metric_page {
     RRDDIM *rd;
-    uint8_t stored;                     // 0x01, 0x2 can be deleted
+    uint8_t status;                     // 0x01 stored, 0x2 can be deleted, 0x04 in use
     time_t first_entry_t;               // First entry in active_page
     time_t last_entry_t;                // Last entry in the active_page  (TODO: Use last collected from RD)
-    size_t entries;                     // Total entries allocated in *values;
-    size_t active_count;                // Total entries stored
+    uint16_t entries;                   // Total entries allocated in *values;
+    uint16_t active_count;              // Total entries stored
     storage_number *values;             // Actual metrics go here
     struct rrddim_metric_page *next;    // This is used in the sqlite flushing
     struct rrddim_metric_page *prev;    // This is used during queries
@@ -349,13 +348,14 @@ struct rrddim_volatile {
 #ifndef ENABLE_DBENGINE
     uuid_t *metric_uuid;
 #endif
-    uint8_t gap_checked;
     time_t db_first_entry_t;       // First entry in the SQLite database
     time_t db_last_entry_t;        // Last entry in the SQLite database (inclusive) TODO: maybe we dont need it
     struct rrddim_metric_page *metric_page_last;
     struct rrddim_metric_page *metric_page;     // This is the ACTIVE page
 #endif
+#ifdef ENABLE_DBENGINE
     union rrddim_collect_handle handle;
+#endif
     // ------------------------------------------------------------------------
     // function pointers that handle data collection
     struct rrddim_collect_ops {
@@ -407,8 +407,6 @@ struct rrdset_volatile {
     char *old_title;
     char *old_family;
     char *old_context;
-    int from;
-    int to;
     time_t first_entry_t;       // First entry in SQLite database (init LONG_MAX)
     time_t last_entry_t;        // Last entry in SQLite database (init 0)
     int transaction;

@@ -126,7 +126,7 @@ uuid_t *find_in_uuid_cache(struct uuid_cache **uuid_cache, const char *type, con
  */
 void sqlite_flush_page_single(struct rrddim_metric_page *metric_page) {
     RRDDIM *rd;
-    if (unlikely(!metric_page || metric_page->stored & 1))
+    if (unlikely(!metric_page || metric_page->status & 1))
         return;
 
     rd = metric_page->rd;
@@ -135,7 +135,7 @@ void sqlite_flush_page_single(struct rrddim_metric_page *metric_page) {
             metric_page->last_entry_t);
 
     //sqlite_page_flush_list.page_count--;
-    metric_page->stored = 1;
+    metric_page->status = 1;
     rd->state->db_last_entry_t = metric_page->last_entry_t;
 //    sqlite_page_flush_list.head = sqlite_page_flush_list.head->next;
     return;
@@ -184,13 +184,13 @@ static void sqlite_flush_page(uint32_t count, struct rrddim_metric_page *target_
     int added = 0;
     while (count && (metric_page = sqlite_page_flush_list.head)) {
         struct rrddim_metric_page *next_metric_page =  sqlite_page_flush_list.head->next;
-        if (likely(!(metric_page->stored & 1))) {
+        if (likely(!(metric_page->status & 1))) {
             rd = metric_page->rd;
             sql_add_metric_page_nolock(rd->state->metric_uuid, metric_page->values, metric_page->active_count, metric_page->first_entry_t,
                 metric_page->last_entry_t);
             // TODO: Check if we need this
             //rd->state->db_last_entry_t = metric_page->last_entry_t;
-            metric_page->stored = 3;        // Stored and can be removed
+            metric_page->status = 3;        // Stored and can be removed
             count--;
             added++;
         }
@@ -230,7 +230,7 @@ struct rrddim_metric_page *rrddim_init_metric_page(RRDDIM *rd)
     struct rrddim_metric_page *metric_page = mallocz(sizeof(*metric_page));
 
     metric_page->active_count = 0;
-    metric_page->stored = 0;
+    metric_page->status = 0;
     metric_page->entries = rd->rrdset->entries;     // Initial entries from the CHART
     metric_page->last_entry_t = 0;
     metric_page->first_entry_t = LONG_MAX;
@@ -317,6 +317,12 @@ int dim_callback(void *dim_ptr, int argc, char **argv, char **azColName)
 #define DIM_TRIGGER "CREATE TEMPORARY TRIGGER tr_dim after delete on ram.dimension begin insert into dimension (dim_uuid, chart_uuid, id, name, multiplier, divisor, algorithm, options) values (old.dim_uuid, old.chart_uuid, old.id, old.name, old.multiplier, old.divisor, old.algorithm, old.options);  end;"
 
 #define CHART_TRIGGER "CREATE TEMPORARY TRIGGER tr_chart after delete on ram.chart begin insert into chart (chart_uuid,host_uuid,type,id,name,family,context,title,unit,plugin,module,priority,update_every,chart_type,memory_mode,history_entries) values (old.chart_uuid,old.host_uuid,old.type,old.id,old.name,old.family,old.context,old.title,old.unit,old.plugin,old.module,old.priority,old.update_every,old.chart_type,old.memory_mode,old.history_entries); end;"
+
+#define METRIC_STATUS "CREATE TABLE IF NOT EXISTS metric_status (metric_id integer primary key, start_date int, end_date);"
+
+#define METRIC_STATUS1 "CREATE TRIGGER if not exists upd_metric_status after insert on metric_page begin insert or replace into metric_status select new.metric_id, case when (select start_date from metric_status t where t.metric_id = new.metric_id) is null then (select start_date from metric_page s where s.metric_id = new.metric_id order by s.start_date asc limit 1) else (select start_date from metric_status t where t.metric_id = new.metric_id) end, new.end_date; end;"
+
+#define METRIC_STATUS2 "CREATE TRIGGER if not exists upd_metric_status2 after delete on metric_page begin insert or replace into metric_status (metric_id, start_date, end_date) values (old.metric_id, (select start_date from metric_page s where s.metric_id = old.metric_id order by s.start_date asc limit 1), (select end_date from metric_status t where t.metric_id = old.metric_id));  end;"
 
 int sql_init_database()
 {
@@ -551,6 +557,27 @@ int sql_init_database()
         error("SQL error: %s", err_msg);
         sqlite3_free(err_msg);
     }
+
+    rc = sqlite3_exec(db, METRIC_STATUS, 0, 0, &err_msg);
+    if (rc != SQLITE_OK) {
+        error("SQL error: %s", err_msg);
+        sqlite3_free(err_msg);
+    }
+
+    rc = sqlite3_exec(db, METRIC_STATUS1, 0, 0, &err_msg);
+    if (rc != SQLITE_OK) {
+        error("SQL error: %s", err_msg);
+        sqlite3_free(err_msg);
+    }
+
+    rc = sqlite3_exec(db, METRIC_STATUS2, 0, 0, &err_msg);
+
+    if (rc != SQLITE_OK) {
+        error("SQL error: %s", err_msg);
+        sqlite3_free(err_msg);
+    }
+
+
 
     sqlite3_create_function(db, "u2h", 1, SQLITE_ANY | SQLITE_DETERMINISTIC , 0, _uuid_parse, 0, 0);
     sqlite3_create_function(db, "h2u", 1, SQLITE_ANY | SQLITE_DETERMINISTIC , 0, _uuid_unparse, 0, 0);
@@ -1909,8 +1936,8 @@ void sql_rrdset_first_entry_t(RRDSET *st, time_t *first, time_t *last)
         return;
 
     if (!res) {
-        rc = sqlite3_prepare_v2(
-            db, "select min(m.start_date), max(m.end_date) from metric_page m, chart c, dimension d where c.chart_uuid = @chart_uuid and d.chart_uuid = c.chart_uuid and d.rowid = m.metric_id;", -1, &res, 0);
+        //rc = sqlite3_prepare_v2(db, "select min(m.start_date), max(m.end_date) from metric_page m, chart c, dimension d where c.chart_uuid = @chart_uuid and d.chart_uuid = c.chart_uuid and d.rowid = m.metric_id;", -1, &res, 0);
+        rc = sqlite3_prepare_v2(db, "select ms.start_date, ms.end_date from metric_status ms, chart c, dimension d where c.chart_uuid = @chart_uuid and d.chart_uuid = c.chart_uuid and d.rowid = ms.metric_id;", -1, &res, 0);
         if (rc != SQLITE_OK)
             return;
     }
@@ -1949,10 +1976,10 @@ void sql_rrddim_first_last_entry_t(RRDDIM *rd, time_t *first, time_t *last)
 
     uv_mutex_lock(&sqlite_lookup);
     if (!res) {
-        rc = sqlite3_prepare_v2(
-            db, "select min(m.start_date), max(m.end_date) from metric_page m, dimension d where d.dim_uuid = @dim_uuid and d.rowid = m.metric_id;", -1, &res,
-            0);
+        //rc = sqlite3_prepare_v2(db, "select min(m.start_date), max(m.end_date) from metric_page m, dimension d where d.dim_uuid = @dim_uuid and d.rowid = m.metric_id;", -1, &res,0);
+        rc = sqlite3_prepare_v2(db, "select ms.start_date, ms.end_date from metric_status ms, dimension d where d.dim_uuid = @dim_uuid and d.rowid = ms.metric_id;", -1, &res,0);
         if (rc != SQLITE_OK) {
+            error("FAILED TO PREPARE STATEMENT");
             uv_mutex_unlock(&sqlite_lookup);
             return;
         }
@@ -2260,7 +2287,7 @@ void rrddim_sql_collect_store_metric(RRDDIM *rd, usec_t point_in_time, storage_n
         struct rrddim_metric_page *old_metric_page = rd->state->metric_page_last;
         struct rrddim_metric_page *tmp_metric_page;
 
-        while (old_metric_page && (old_metric_page->stored & 2) && old_metric_page->prev) {
+        while (old_metric_page && (old_metric_page->status & 2) && old_metric_page->prev) {
             tmp_metric_page = old_metric_page->prev;
             freez(old_metric_page->values);
             freez(old_metric_page);
@@ -2277,19 +2304,19 @@ void rrddim_sql_collect_store_metric(RRDDIM *rd, usec_t point_in_time, storage_n
     else
         rd->state->metric_page->active_count++;
 
-    if (unlikely(!rd->state->gap_checked)) {
-        //rd->state->gap_checked = 1;
-        //info("Checking %s for gap filling", rd->id);
-        if (rd->state->metric_page->first_entry_t != LONG_MAX) {
-            if (rd->state->db_last_entry_t && rd->state->db_last_entry_t < rd->state->metric_page->first_entry_t) {
-                //info("Adding gap for (%s) %d - %d",  rd->id, rd->state->db_last_entry_t + 1, rd->state->first_entry_t - 1);
-                sql_add_metric_page(
-                    rd->state->metric_uuid, NULL, 0, rd->state->db_last_entry_t + 1, rd->state->metric_page->first_entry_t - 1);
-                rd->state->db_last_entry_t = rd->state->metric_page->first_entry_t - 1;
-                rd->state->gap_checked = 1;
-            }
-        }
-    }
+//    if (unlikely(!rd->state->gap_checked)) {
+//        //rd->state->gap_checked = 1;
+//        //info("Checking %s for gap filling", rd->id);
+//        if (rd->state->metric_page->first_entry_t != LONG_MAX) {
+//            if (rd->state->db_last_entry_t && rd->state->db_last_entry_t < rd->state->metric_page->first_entry_t) {
+//                //info("Adding gap for (%s) %d - %d",  rd->id, rd->state->db_last_entry_t + 1, rd->state->first_entry_t - 1);
+//                sql_add_metric_page(
+//                    rd->state->metric_uuid, NULL, 0, rd->state->db_last_entry_t + 1, rd->state->metric_page->first_entry_t - 1);
+//                rd->state->db_last_entry_t = rd->state->metric_page->first_entry_t - 1;
+//                rd->state->gap_checked = 1;
+//            }
+//        }
+//    }
 }
 
 void rrddim_sql_flush_metrics(RRDDIM *rd)
@@ -2321,6 +2348,9 @@ int rrddim_sql_collect_finalize(RRDDIM *rd)
 
 void rrddim_sql_query_init(RRDDIM *rd, struct rrddim_query_handle *handle, time_t start_time, time_t end_time)
 {
+    if (unlikely(!handle || !rd || start_time > end_time))
+        return;
+
     handle->rd = rd;
 
     start_time = MAX(start_time, MIN(rd->state->db_first_entry_t, rd->state->metric_page->first_entry_t));
@@ -2345,7 +2375,7 @@ void rrddim_sql_query_init(RRDDIM *rd, struct rrddim_query_handle *handle, time_
 //        handle->slotted.slot = LONG_MAX;
 
     handle->slotted.finished = 0;
-    handle->slotted.init = 0;
+    handle->slotted.query = NULL;
 //    info("Request (%d - %d) - BUFFER has (%d - %d) SQLite (%d to %d)", start_time, end_time,
  //        metric_page->first_entry_t, metric_page->last_entry_t, rd->state->db_first_entry_t, rd->state->db_last_entry_t);
 
@@ -2364,7 +2394,7 @@ void rrddim_sql_query_init(RRDDIM *rd, struct rrddim_query_handle *handle, time_
 //                "select start_date, end_date, entries, uncompress(metric) from metric_page where dim_uuid = @dim_uuid and (@start_date between start_date and end_date or @end_date between start_date and end_date or (@start_date <= start_date and @end_date >= end_date)) and entries > 0 order by start_date asc;",
 //                -1, &(handle->slotted.query), 0);
 
-              int rc = sqlite3_prepare_v2(
+            int rc = sqlite3_prepare_v2(
                 db,
                 "select start_date, end_date, entries, uncompress(metric) from metric_page m, dimension d where d.dim_uuid = @dim_uuid and m.metric_id = d.rowid and (@start_date between start_date and end_date or @end_date between start_date and end_date or (@start_date <= start_date and @end_date >= end_date)) and entries > 0 order by start_date asc;",
                 -1, query, 0);
@@ -2374,7 +2404,6 @@ void rrddim_sql_query_init(RRDDIM *rd, struct rrddim_query_handle *handle, time_
                 rc = sqlite3_bind_int(*query, 3, end_time);
                 handle->slotted.local_end_time = 0;
                 handle->slotted.local_start_time = 0;
-                handle->slotted.init = 1;
             } else
                 info("SQLITE: Query statement failed to prepare");
     }
@@ -2390,7 +2419,7 @@ storage_number rrddim_sql_query_next_metric(struct rrddim_query_handle *handle, 
 
     //info("Query next for %s %d slots (%d - %d)", rd->id, *current_time, handle->slotted.slot, handle->slotted.last_slot);
 
-    if (handle->slotted.init) {
+    if (handle->slotted.query) {
         sqlite3_stmt *query = (sqlite3_stmt *) handle->slotted.query;
         while (1) {
             int have_valid_entry = 0;
@@ -2423,8 +2452,8 @@ storage_number rrddim_sql_query_next_metric(struct rrddim_query_handle *handle, 
                 if (unlikely(handle->end_time == *current_time)) {
                     //info("SQLITE: Completed at %d", *current_time);
                     handle->slotted.finished = 1;
-                    handle->slotted.init = 0;
                     sqlite3_finalize(query);
+                    handle->slotted.query = NULL;
                 }
                 metrics_read++;
                 return ret;
@@ -2443,9 +2472,6 @@ storage_number rrddim_sql_query_next_metric(struct rrddim_query_handle *handle, 
             // No valid entry, no more DB results lets go to the hot page
             sqlite3_finalize(query);
             handle->slotted.query = NULL;
-            handle->slotted.init = 0;
-            handle->slotted.local_start_time = 0;
-            handle->slotted.local_end_time = 0;
             break;
         }
     }
@@ -2457,7 +2483,6 @@ storage_number rrddim_sql_query_next_metric(struct rrddim_query_handle *handle, 
     // If they ask for a value less that the first entry then return EMPTY
     // It probably went to the database and it didn't find anything anyway
     if (*current_time < metric_page->first_entry_t) {
-        //info("Active request time %d -- will serve EMPTY due to gap", *current_time);
         return SN_EMPTY_SLOT;
     }
 
@@ -2482,48 +2507,11 @@ storage_number rrddim_sql_query_next_metric(struct rrddim_query_handle *handle, 
         return SN_EMPTY_SLOT;
     }
 
-//    if (*current_time >= rd->state->metric_page->first_entry_t && *current_time <= rd->state->metric_page->last_entry_t) {
-//
-//        if (unlikely(rd->state->metric_page->first_entry_t == rd->state->metric_page->first_entry_t))
-//            index = 0;
-//        else
-//            index = ((uint64_t)(*current_time - rd->state->metric_page->first_entry_t)) *
-//                    (rd->state->metric_page->active_count - 1) / (rd->state->metric_page->first_entry_t - rd->state->metric_page->first_entry_t);
-//    }
-
-    //    size_t position;
-//    if (unlikely(rd->state->active_count == 1))
-//        position = 0;
-//    else
-//        position = ((uint64_t)(*current_time - rd->state->first_entry_t)) * (rd->state->active_count - 1) /
-//               (rd->state->last_entry_t - rd->state->first_entry_t);
-
-    //info("Active request time %d -- will serve %d", *current_time, metric_page->first_entry_t + (index * rd->update_every));
-//    if (unlikely(*current_time == rd->state->first_entry_t + (slot * rd->update_every)))
-//        handle->slotted.finished = 1;
-
-    if (unlikely(*current_time == handle->end_time)) {
-        //info("Active request time %d (DONE)", *current_time);
+    if (unlikely(*current_time == handle->end_time))
         handle->slotted.finished = 1;
-    }
 
-    //storage_number n = rd->state->metric_page->values[slot++];
-
-    storage_number n = metric_page->values[index];
-
-//    if (unlikely(handle->slotted.slot == LONG_MAX))
-//        handle->slotted.finished = 1;
-//
-//    if (unlikely(handle->slotted.slot == handle->slotted.last_slot))
-//        handle->slotted.finished = 1;
-//    storage_number n = rd->values[slot++];
-//    info("Return %d from buffer (%d)", *current_time, n);
-//
-//    if (unlikely(slot >= entries))
-//        slot = 0;
-    //handle->slotted.slot = slot;
     in_memory_metrics_read++;
-    return n;
+    return metric_page->values[index];
 }
 
 int rrddim_sql_query_is_finished(struct rrddim_query_handle *handle)
@@ -2535,7 +2523,7 @@ void rrddim_sql_query_finalize(struct rrddim_query_handle *handle)
 {
     (void)handle;
 
-    if (handle->slotted.init) {
+    if (handle->slotted.query) {
         error("Query has not been finalized");
     }
     return;

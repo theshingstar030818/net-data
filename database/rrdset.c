@@ -1940,7 +1940,15 @@ after_second_database_work:
                         if(unlikely(unlink(rd->cache_filename) == -1))
                             error("Cannot delete dimension file '%s'", rd->cache_filename);
                     }
-
+#ifdef ENABLE_SQLITE
+                    if (rd->rrd_memory_mode == RRD_MEMORY_MODE_SQLITE) {
+                        rrddim_flag_set(rd, RRDDIM_FLAG_ARCHIVED);
+                        while(rd->variables)
+                            rrddimvar_free(rd->variables);
+                        rrddim_flag_clear(rd, RRDDIM_FLAG_OBSOLETE);
+                        (void) rd->state->collect_ops.finalize(rd);
+                    }
+#endif
 #ifdef ENABLE_DBENGINE
                     if (rd->rrd_memory_mode == RRD_MEMORY_MODE_DBENGINE) {
                         rrddim_flag_set(rd, RRDDIM_FLAG_ARCHIVED);
