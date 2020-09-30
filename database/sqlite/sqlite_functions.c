@@ -640,11 +640,10 @@ void do_metric_rotation()
     }
 
     rc = sqlite3_step(stmt_metric_page_rotation);
-    if (rc == SQLITE_OK)
-        return;
-
-   error("Error while deleting metric data for rotation %d", rc);
-   return;
+    sqlite3_reset(stmt_metric_page_rotation);
+    if (rc != SQLITE_OK)
+        error("Error while deleting metric data for rotation %d", rc);
+    return;
 }
 
 int sql_close_database()
