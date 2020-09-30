@@ -148,15 +148,15 @@ static void sqlite_flush_page(uint32_t count, struct rrddim_metric_page *target_
     struct rrddim_metric_page *metric_page;
 
     if (unlikely(target_metric_page)) {
-        uv_mutex_lock(&sqlite_flush);
         uv_mutex_lock(&sqlite_add_page);
+        uv_mutex_lock(&sqlite_flush);
         metric_page = target_metric_page;
         while (metric_page) {
             sqlite_flush_page_single(metric_page);
             metric_page = metric_page->prev;
         }
-        uv_mutex_unlock(&sqlite_add_page);
         uv_mutex_unlock(&sqlite_flush);
+        uv_mutex_unlock(&sqlite_add_page);
         return;
     }
 
