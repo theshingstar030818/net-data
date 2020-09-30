@@ -641,7 +641,7 @@ void do_metric_rotation()
 
     rc = sqlite3_step(stmt_metric_page_rotation);
     sqlite3_reset(stmt_metric_page_rotation);
-    if (rc != SQLITE_OK)
+    if (rc != SQLITE_DONE)
         error("Error while deleting metric data for rotation %d", rc);
     return;
 }
@@ -1576,7 +1576,7 @@ void sql_add_metric_page_nolock(uuid_t *dim_uuid, storage_number *metric, size_t
 
     pending_page_inserts++;
     sqlite3_reset(stmt_metric_page);
-    sqlite3_reset(stmt_metric_page_rotation);
+    //sqlite3_reset(stmt_metric_page_rotation);
 
     if (pending_page_inserts == database_flush_transaction_count) {
         do_metric_rotation();
