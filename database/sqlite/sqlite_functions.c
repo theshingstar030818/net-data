@@ -657,7 +657,7 @@ int sql_close_database()
         while (sqlite_page_flush_list.page_count) {
             sqlite_flush_page(database_flush_transaction_count, NULL);
         }
-        uv_mutex_unlock(&sqlite_add_page);
+        uv_mutex_lock(&sqlite_add_page);
         if (pending_page_inserts) {
             info("Writing final transactions %u", pending_page_inserts);
             sqlite3_exec(db_page, "COMMIT TRANSACTION;", 0, 0, &err_msg);
