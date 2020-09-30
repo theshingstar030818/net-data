@@ -198,7 +198,7 @@ static void sqlite_flush_page(uint32_t count, struct rrddim_metric_page *target_
         sqlite_page_flush_list.head = next_metric_page;
         if (added % 10 == 0 && next_metric_page) {
             uv_mutex_unlock(&sqlite_flush);
-            uv_mutex_unlock(&sqlite_add_page);
+            uv_mutex_lock(&sqlite_flush);
         }
     }
     if (!sqlite_page_flush_list.head)
