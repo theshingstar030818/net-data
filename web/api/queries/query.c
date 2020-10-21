@@ -1571,7 +1571,7 @@ RRDR *rrd2rrdr(
     time_t first_entry_t;
     time_t last_entry_t;
     if (context_param_list) {
-        first_entry_t = context_param_list->first_entry_t;
+        first_entry_t = after_requested; //context_param_list->first_entry_t;
         last_entry_t = context_param_list->last_entry_t;
     } else {
         first_entry_t = rrdset_first_entry_t(st);
