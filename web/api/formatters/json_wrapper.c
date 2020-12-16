@@ -161,6 +161,7 @@ void rrdr_json_wrapper_begin(RRDR *r, BUFFER *wb, uint32_t format, RRDR_OPTIONS 
         }
     }
 
+
     buffer_sprintf(wb, "   %slatest_values%s: ["
                    , kq, kq);
 
