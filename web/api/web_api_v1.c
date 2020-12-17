@@ -2,6 +2,7 @@
 
 #include "web_api_v1.h"
 
+
 char *api_secret;
 
 static struct {
@@ -1020,6 +1021,7 @@ static struct api_command {
         { "alarm_count",     0, WEB_CLIENT_ACL_DASHBOARD, web_client_api_request_v1_alarm_count     },
         { "allmetrics",      0, WEB_CLIENT_ACL_DASHBOARD, web_client_api_request_v1_allmetrics      },
         { "manage/health",   0, WEB_CLIENT_ACL_MGMT,      web_client_api_request_v1_mgmt_health     },
+        { "flood",           0, WEB_CLIENT_ACL_MGMT,      web_client_api_request_v1_flood           },
         // terminator
         { NULL,              0, WEB_CLIENT_ACL_NONE,      NULL                                      },
 };
@@ -1060,4 +1062,94 @@ inline int web_client_api_request_v1(RRDHOST *host, struct web_client *w, char *
         buffer_sprintf(w->response.data, "Which API v1 command?");
         return HTTP_RESP_BAD_REQUEST;
     }
+}
+
+// returns the HTTP code
+inline int web_client_api_request_v1_flood(RRDHOST *host, struct web_client *w, char *url) {
+    debug(D_WEB_CLIENT, "%llu: API v1 data with URL '%s'", w->id, url);
+
+    int ret = HTTP_RESP_BAD_REQUEST;
+
+    buffer_flush(w->response.data);
+
+    int old_status = 0;
+    int new_status = 0;
+    int step = 99999;
+    int my_sleep = 0;
+
+    while(url) {
+        char *value = mystrsep(&url, "&");
+        if(!value || !*value) continue;
+
+        char *name = mystrsep(&value, "=");
+        if(!name || !*name) continue;
+        if(!value || !*value) continue;
+
+        debug(D_WEB_CLIENT, "%llu: API v1 data query param '%s' with value '%s'", w->id, name, value);
+
+        // name and value are now the parameters
+        // they are not null and not empty
+
+        char *p = value;
+        if(!strcmp(name, "old_status")) {
+            while ((*p = toupper(*p))) p++;
+            if (!strcmp("CRITICAL", value)) old_status = RRDCALC_STATUS_CRITICAL;
+            else if (!strcmp("WARNING", value)) old_status = RRDCALC_STATUS_WARNING;
+            else if (!strcmp("UNINITIALIZED", value)) old_status = RRDCALC_STATUS_UNINITIALIZED;
+            else if (!strcmp("UNDEFINED", value)) old_status = RRDCALC_STATUS_UNDEFINED;
+            else if (!strcmp("REMOVED", value)) old_status = RRDCALC_STATUS_REMOVED;
+            else if (!strcmp("CLEAR", value)) old_status = RRDCALC_STATUS_CLEAR;
+        }
+
+        if(!strcmp(name, "new_status")) {
+            while ((*p = toupper(*p))) p++;
+            if (!strcmp("CRITICAL", value)) new_status = RRDCALC_STATUS_CRITICAL;
+            else if (!strcmp("WARNING", value)) new_status = RRDCALC_STATUS_WARNING;
+            else if (!strcmp("UNINITIALIZED", value)) new_status = RRDCALC_STATUS_UNINITIALIZED;
+            else if (!strcmp("UNDEFINED", value)) new_status = RRDCALC_STATUS_UNDEFINED;
+            else if (!strcmp("REMOVED", value)) new_status = RRDCALC_STATUS_REMOVED;
+            else if (!strcmp("CLEAR", value)) new_status = RRDCALC_STATUS_CLEAR;
+        }
+
+        if(!strcmp(name, "step")) {
+            step = str2i(value);
+        }
+
+        if(!strcmp(name, "sleep")) {
+            my_sleep = str2i(value);
+        }
+
+
+    }
+
+    netdata_rwlock_rdlock(&host->health_log.alarm_log_rwlock);
+
+    unsigned int max = host->health_log.max;
+    unsigned int count = 0;
+    ALARM_ENTRY *ae;
+    info("Starting FLOOD %s to %s", rrdcalc_status2string(old_status), rrdcalc_status2string(new_status));
+    for (ae = host->health_log.alarms; ae && count < max; ae = ae->next) {
+        ae->new_status = new_status;
+        ae->old_status = old_status;
+        //info("ALARM SENT from %s to %s", rrdcalc_status2string(ae->old_status), rrdcalc_status2string(ae->new_status));
+
+        if (count % step == 0) {
+            if (my_sleep) {
+                sleep_usec(my_sleep * USEC_PER_MS);
+                info("SLEEP %d", count);
+            }
+        }
+
+//        if (likely(!((ae->new_status == RRDCALC_STATUS_WARNING || ae->new_status == RRDCALC_STATUS_CRITICAL) &&
+//                  !ae->updated_by_id)))
+//            continue;
+//        aclk_update_alarm(host, ae);
+//        info("ALARM SENT");
+        count++;
+    }
+    info("Ending FLOOD ...");
+    netdata_rwlock_unlock(&host->health_log.alarm_log_rwlock);
+    buffer_sprintf(w->response.data, "Alarm flood sent");
+
+    return HTTP_RESP_OK;
 }
