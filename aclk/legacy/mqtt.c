@@ -345,14 +345,14 @@ int _link_send_message(char *topic, const void *message, size_t len, int *mid)
     lws_wss_check_queues(&write_q, &write_q_bytes, &read_q);
     rc = mosquitto_publish(mosq, mid, topic, len, message, ACLK_QOS, 0);
 
-#ifdef NETDATA_INTERNAL_CHECKS
-    char msg_head[64];
+    char msg_head[128];
     memset(msg_head, 0, sizeof(msg_head));
-    strncpy(msg_head, (char*)message, 60);
+    strncpy(msg_head, (char*)message, 124);
     for (size_t i = 0; i < sizeof(msg_head); i++)
-        if(msg_head[i] == '\n') msg_head[i] = ' ';
+        if(msg_head[i] == '\n' || msg_head[i] == '\t') msg_head[i] = ' ';
     info("Sending MQTT len=%d mid=%d wq=%zu (%zu-bytes) readq=%zu: %s", (int)len,
          *mid, write_q, write_q_bytes, read_q, msg_head);
+#ifdef NETDATA_INTERNAL_CHECKS
     now_realtime_timeval(&sendTimes[ *mid & 0x3ff ]);
 #endif
 
