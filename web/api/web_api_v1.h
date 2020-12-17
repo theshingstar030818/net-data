@@ -30,6 +30,7 @@ extern void host_labels2json(RRDHOST *host, BUFFER *wb, size_t indentation);
 
 extern void web_client_api_v1_init(void);
 extern void web_client_api_v1_management_init(void);
+extern int web_client_api_request_v1_flood(RRDHOST *host, struct web_client *w, char *url);
 
 extern char *api_secret;
 
