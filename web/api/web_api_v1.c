@@ -1064,7 +1064,7 @@ inline int web_client_api_request_v1(RRDHOST *host, struct web_client *w, char *
     }
 }
 
-// returns the HTTP code
+
 inline int web_client_api_request_v1_flood(RRDHOST *host, struct web_client *w, char *url) {
     debug(D_WEB_CLIENT, "%llu: API v1 data with URL '%s'", w->id, url);
 
@@ -1076,6 +1076,8 @@ inline int web_client_api_request_v1_flood(RRDHOST *host, struct web_client *w, 
     int new_status = 0;
     int step = 99999;
     int my_sleep = 0;
+    int max_count = 10;
+    char *alarm_type = NULL;
 
     while(url) {
         char *value = mystrsep(&url, "&");
@@ -1119,37 +1121,60 @@ inline int web_client_api_request_v1_flood(RRDHOST *host, struct web_client *w, 
             my_sleep = str2i(value);
         }
 
-
-    }
-
-    netdata_rwlock_rdlock(&host->health_log.alarm_log_rwlock);
-
-    unsigned int max = host->health_log.max;
-    unsigned int count = 0;
-    ALARM_ENTRY *ae;
-    info("Starting FLOOD %s to %s", rrdcalc_status2string(old_status), rrdcalc_status2string(new_status));
-    for (ae = host->health_log.alarms; ae && count < max; ae = ae->next) {
-        ae->new_status = new_status;
-        ae->old_status = old_status;
-        //info("ALARM SENT from %s to %s", rrdcalc_status2string(ae->old_status), rrdcalc_status2string(ae->new_status));
-
-        if (count % step == 0) {
-            if (my_sleep) {
-                sleep_usec(my_sleep * USEC_PER_MS);
-                info("SLEEP %d", count);
-            }
+        if(!strcmp(name, "count")) {
+            max_count = str2i(value);
         }
 
-//        if (likely(!((ae->new_status == RRDCALC_STATUS_WARNING || ae->new_status == RRDCALC_STATUS_CRITICAL) &&
-//                  !ae->updated_by_id)))
-//            continue;
-//        aclk_update_alarm(host, ae);
-//        info("ALARM SENT");
-        count++;
+        if(!strcmp(name, "type")) {
+            char *p = value;
+            while ((*p = toupper(*p))) p++;
+            alarm_type = value;
+        }
     }
-    info("Ending FLOOD ...");
-    netdata_rwlock_unlock(&host->health_log.alarm_log_rwlock);
-    buffer_sprintf(w->response.data, "Alarm flood sent");
 
+    if (!alarm_type) {
+        buffer_sprintf(w->response.data, "Please specify type=alarm or type=chart");
+        return HTTP_RESP_OK;
+    }
+
+    if (strcmp(alarm_type, "ALARM") == 0) {
+        netdata_rwlock_rdlock(&host->health_log.alarm_log_rwlock);
+        unsigned int max = host->health_log.max;
+        unsigned int count = 0;
+        ALARM_ENTRY *ae;
+        info("Starting ALARTM FLOOD %s to %s", rrdcalc_status2string(old_status), rrdcalc_status2string(new_status));
+        for (ae = host->health_log.alarms; max_count && ae && count < max; ae = ae->next) {
+            ae->new_status = new_status;
+            ae->old_status = old_status;
+            if (count % step == 0) {
+                if (my_sleep) {
+                    sleep_usec(my_sleep * USEC_PER_MS);
+                    info("SLEEP %d", count);
+                }
+            }
+            aclk_update_alarm(host, ae);
+            count++;
+            --max_count;
+        }
+        info("Ending ALARM FLOOD ... %ld sent", count);
+        netdata_rwlock_unlock(&host->health_log.alarm_log_rwlock);
+        buffer_sprintf(w->response.data, "Alarm flood sent");
+    }
+    else if (strcmp(alarm_type, "CHART") ==0) {
+        rrdhost_rdlock(host);
+        RRDSET *st;
+        unsigned int count = 0;
+        info("Starting CHART FLOOD");
+        rrdset_foreach_read(st, host) {
+            rrdset_flag_set(st, RRDSET_FLAG_ACLK);
+            if (!max_count)
+                break;
+            count++;
+            --max_count;
+        }
+        rrdhost_unlock(host);
+        info("Ending CHART FLOOD... %ld sent", count);
+        buffer_sprintf(w->response.data, "Chart flood scheduled for %d charts", count);
+    }
     return HTTP_RESP_OK;
 }
