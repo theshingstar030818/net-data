@@ -32,7 +32,7 @@ details on signing up for Netdata Cloud, installation, and claiming.
 > If you want to monitor a Kubernetes cluster with Netdata, see our [k8s installation
 > doc](/packaging/installer/methods/kubernetes.md) for setup details, and then read our guide, [_Monitor a Kubernetes
 > cluster with Netdata_](/docs/guides/monitor/kubernetes-k8s-netdata.md).
-
+  
 ## Set up your Netdata Cloud experience
 
 Start your infrastructure monitoring experience by setting up your Netdata Cloud account.
