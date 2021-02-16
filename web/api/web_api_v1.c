@@ -355,6 +355,15 @@ inline int web_client_api_request_v1_charts(RRDHOST *host, struct web_client *w,
     return HTTP_RESP_OK;
 }
 
+inline int web_client_api_request_v1_charts1(RRDHOST *host, struct web_client *w, char *url) {
+    (void)url;
+
+    buffer_flush(w->response.data);
+    w->response.data->contenttype = CT_APPLICATION_JSON;
+    charts2json(host, w->response.data, 0, 1);
+    return HTTP_RESP_OK;
+}
+
 inline int web_client_api_request_v1_archivedcharts(RRDHOST *host __maybe_unused, struct web_client *w, char *url) {
     (void)url;
 
@@ -1006,6 +1015,7 @@ static struct api_command {
         { "data",            0, WEB_CLIENT_ACL_DASHBOARD, web_client_api_request_v1_data            },
         { "chart",           0, WEB_CLIENT_ACL_DASHBOARD, web_client_api_request_v1_chart           },
         { "charts",          0, WEB_CLIENT_ACL_DASHBOARD, web_client_api_request_v1_charts          },
+        { "archived_charts", 0, WEB_CLIENT_ACL_DASHBOARD, web_client_api_request_v1_charts1         },
         { "archivedcharts",  0, WEB_CLIENT_ACL_DASHBOARD, web_client_api_request_v1_archivedcharts  },
 
         // registry checks the ACL by itself, so we allow everything
